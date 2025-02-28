@@ -1,0 +1,67 @@
+name: Extract GHSA IDs from Yarn Audit
+
+on:
+  # Trigger the workflow on push events
+  push:
+    branches:
+      - "*" # Replace 'main' with your default branch if different
+  # Optional: Also allow manual triggering
+  workflow_dispatch:
+
+jobs:
+  extract-ghsa:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Checkout the repository
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Step 2: Set up Node.js and install dependencies
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      # Step 3: Run yarn audit and save the output
+      - name: Run yarn audit
+        id: yarn-audit
+        run: |
+          yarn audit > audit_output.txt
+
+      # Step 4: Extract advisory IDs and fetch GHSA IDs
+      - name: Extract GHSA IDs
+        id: extract-ghsa
+        run: |
+          # Extract advisory IDs from "More info" URLs
+          advisory_ids=$(grep "More info" audit_output.txt | sed -E 's/.*\/([0-9]+).*/\1/')
+
+          # Initialize an empty array to store GHSA IDs
+          ghsa_ids=()
+
+          # Loop through each advisory ID and fetch the GHSA ID
+          for id in $advisory_ids; do
+            ghsa_id=$(curl -sL "https://www.npmjs.com/advisories/$id" | grep -o 'GHSA-[a-z0-9-]*' | head -n 1)
+            if [ -n "$ghsa_id" ]; then
+              ghsa_ids+=("$ghsa_id")
+            fi
+          done
+
+          # Output the GHSA IDs as a comma-separated string
+          echo "GHSA_IDS=${ghsa_ids[*]}" >> $GITHUB_ENV
+
+      # Step 5: Print the GHSA IDs
+      - name: Print GHSA IDs
+        run: |
+          echo "Extracted GHSA IDs: ${{ env.GHSA_IDS }}"
+
+      # Optional: Save GHSA IDs as a workflow artifact
+      - name: Save GHSA IDs as artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: ghsa-ids
+          path: |
+            audit_output.txt
