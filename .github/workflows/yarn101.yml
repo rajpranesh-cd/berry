@@ -15,11 +15,11 @@ jobs:
     steps:
       # Step 1: Checkout the repository
       - name: Checkout code
-        uses: actions/checkout@v3 # Use a stable version of the checkout action
+        uses: actions/checkout@main # Use the main branch of the checkout action
 
       # Step 2: Set up Node.js and install dependencies
       - name: Set up Node.js
-        uses: actions/setup-node@v3 # Use a stable version of the setup-node action
+        uses: actions/setup-node@main # Use the main branch of the setup-node action
         with:
           node-version: '18'
 
@@ -76,7 +76,7 @@ jobs:
       # Optional: Save GHSA IDs as a workflow artifact
       - name: Save GHSA IDs as artifact
         if: always() && env.GHSA_IDS != 'none' # Only run if GHSA IDs were found
-        uses: actions/upload-artifact@v3 # Use a stable version of the upload-artifact action
+        uses: actions/upload-artifact@main # Use the main branch of the upload-artifact action
         with:
           name: ghsa-ids
           path: |
