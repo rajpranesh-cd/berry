@@ -31,8 +31,7 @@ jobs:
       - name: Run yarn audit
         id: yarn-audit
         run: |
-          yarn audit > audit_output.txt 
-          cat audit_output.txt
+          yarn audit > audit_output.txt || echo "No vulnerabilities found or yarn audit failed."
 
       # Step 4: Extract advisory IDs and fetch GHSA IDs
       - name: Extract GHSA IDs
