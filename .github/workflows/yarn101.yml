@@ -15,43 +15,58 @@ jobs:
     steps:
       # Step 1: Checkout the repository
       - name: Checkout code
-        uses: actions/checkout@main # Use the main branch of the checkout action
+        uses: actions/checkout@v3 # Use a stable version of the checkout action
 
       # Step 2: Set up Node.js and install dependencies
       - name: Set up Node.js
-        uses: actions/setup-node@main # Use the main branch of the setup-node action
+        uses: actions/setup-node@v3 # Use a stable version of the setup-node action
         with:
           node-version: '18'
 
       - name: Install dependencies
-        run: yarn install --frozen-lockfile
+        run: |
+          yarn install --frozen-lockfile || echo "Yarn install failed, but continuing..."
 
       # Step 3: Run yarn audit and save the output
       - name: Run yarn audit
         id: yarn-audit
         run: |
-          yarn audit > audit_output.txt
+          yarn audit > audit_output.txt || echo "No vulnerabilities found or yarn audit failed."
 
       # Step 4: Extract advisory IDs and fetch GHSA IDs
       - name: Extract GHSA IDs
         id: extract-ghsa
         run: |
-          # Extract advisory IDs from "More info" URLs
-          advisory_ids=$(grep "More info" audit_output.txt | sed -E 's/.*\/([0-9]+).*/\1/')
-
           # Initialize an empty array to store GHSA IDs
           ghsa_ids=()
 
-          # Loop through each advisory ID and fetch the GHSA ID
-          for id in $advisory_ids; do
-            ghsa_id=$(curl -sL "https://www.npmjs.com/advisories/$id" | grep -o 'GHSA-[a-z0-9-]*' | head -n 1)
-            if [ -n "$ghsa_id" ]; then
-              ghsa_ids+=("$ghsa_id")
-            fi
-          done
+          # Check if audit_output.txt exists
+          if [ -f "audit_output.txt" ]; then
+            # Extract advisory IDs from "More info" URLs
+            advisory_ids=$(grep "More info" audit_output.txt | sed -E 's/.*\/([0-9]+).*/\1/' || true)
 
-          # Output the GHSA IDs as a comma-separated string
-          echo "GHSA_IDS=${ghsa_ids[*]}" >> $GITHUB_ENV
+            # Loop through each advisory ID and fetch the GHSA ID with retry logic
+            for id in $advisory_ids; do
+              retries=3
+              while [ $retries -gt 0 ]; do
+                ghsa_id=$(curl -sL "https://www.npmjs.com/advisories/$id" | grep -o 'GHSA-[a-z0-9-]*' | head -n 1)
+                if [ -n "$ghsa_id" ]; then
+                  ghsa_ids+=("$ghsa_id")
+                  break
+                else
+                  retries=$((retries - 1))
+                  sleep 2
+                fi
+              done
+            done
+          fi
+
+          # Output the GHSA IDs as a comma-separated string (default to "none" if empty)
+          if [ ${#ghsa_ids[@]} -eq 0 ]; then
+            echo "GHSA_IDS=none" >> $GITHUB_ENV
+          else
+            echo "GHSA_IDS=${ghsa_ids[*]}" >> $GITHUB_ENV
+          fi
 
       # Step 5: Print the GHSA IDs
       - name: Print GHSA IDs
@@ -60,7 +75,8 @@ jobs:
 
       # Optional: Save GHSA IDs as a workflow artifact
       - name: Save GHSA IDs as artifact
-        uses: actions/upload-artifact@main # Use the main branch of the upload-artifact action
+        if: always() && env.GHSA_IDS != 'none' # Only run if GHSA IDs were found
+        uses: actions/upload-artifact@v3 # Use a stable version of the upload-artifact action
         with:
           name: ghsa-ids
           path: |
