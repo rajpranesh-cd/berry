@@ -1,9 +1,11 @@
 name: Extract GHSA IDs from Yarn Audit
 
 on:
+  # Trigger the workflow on push events for all branches
   push:
     branches:
-      - "*" # Replace 'main' with your default branch if different
+      - '*' # Run on all branches
+  # Optional: Allow manual triggering
   workflow_dispatch:
 
 jobs:
@@ -13,11 +15,11 @@ jobs:
     steps:
       # Step 1: Checkout the repository
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@main # Use the main branch of the checkout action
 
       # Step 2: Set up Node.js and install dependencies
       - name: Set up Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@main # Use the main branch of the setup-node action
         with:
           node-version: '18'
 
@@ -34,14 +36,21 @@ jobs:
       - name: Extract GHSA IDs
         id: extract-ghsa
         run: |
+          # Extract advisory IDs from "More info" URLs
           advisory_ids=$(grep "More info" audit_output.txt | sed -E 's/.*\/([0-9]+).*/\1/')
+
+          # Initialize an empty array to store GHSA IDs
           ghsa_ids=()
+
+          # Loop through each advisory ID and fetch the GHSA ID
           for id in $advisory_ids; do
             ghsa_id=$(curl -sL "https://www.npmjs.com/advisories/$id" | grep -o 'GHSA-[a-z0-9-]*' | head -n 1)
             if [ -n "$ghsa_id" ]; then
               ghsa_ids+=("$ghsa_id")
             fi
           done
+
+          # Output the GHSA IDs as a comma-separated string
           echo "GHSA_IDS=${ghsa_ids[*]}" >> $GITHUB_ENV
 
       # Step 5: Print the GHSA IDs
@@ -49,14 +58,9 @@ jobs:
         run: |
           echo "Extracted GHSA IDs: ${{ env.GHSA_IDS }}"
 
-      # Optional: Debug upload-artifact action
-      - name: Debug upload-artifact action
-        run: |
-          curl -I https://api.github.com/repos/actions/upload-artifact/contents/action.yml
-
-      # Optional: Save GHSA IDs as artifact
+      # Optional: Save GHSA IDs as a workflow artifact
       - name: Save GHSA IDs as artifact
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@main # Use the main branch of the upload-artifact action
         with:
           name: ghsa-ids
           path: |
